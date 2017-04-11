@@ -164,6 +164,10 @@ class Speed:
     def abs_y_mps(self):
         return abs(self.y_mps)
 
+    @property
+    def coords(self):
+        return self.x_mps, self.y_mps
+
     def __add__(self, other):
         return Speed(self.x_mps + other.x_mps, self.y_mps + other.y_mps)
 
@@ -178,10 +182,6 @@ class Speed:
 
     def __truediv__(self, other):
         return Speed(self.x_mps / other, self.y_mps / other)
-
-    @property
-    def coords(self):
-        return self.x_mps, self.y_mps
 
 
 class Box(pygame.Rect):
@@ -280,20 +280,6 @@ class Box(pygame.Rect):
 
     def bounce_x(self):
         self.speed.bounce_x()
-
-    def collide_x(self, box):
-        if same_sign(box.speed.x_mps, self.speed.x_mps):
-            if not box.speed.abs_x_mps > self.speed.abs_x_mps:
-                self.bounce_x()
-        else:
-            self.bounce_x()
-
-    def collide_y(self, box):
-        if same_sign(box.speed.y_mps, self.speed.y_mps):
-            if not box.speed.abs_y_mps > self.speed.abs_y_mps:
-                self.bounce_y()
-        else:
-            self.bounce_y()
 
 
 def main():
