@@ -12,7 +12,7 @@ WINDOW_WIDTH = 600
 WINDOW_HEIGHT = 600
 PX_PER_M = 1
 
-MAX_SPEED = 3
+MAX_SPEED = 5
 DEFAULT_WIDTH = 10
 DEFAULT_HEIGHT = 10
 
@@ -30,9 +30,9 @@ BLUE = THECOLORS["blue"]
 
 # set up the block data structure
 def make_random_boxes():
-    b1 = Box(64, 167, 20, 20, RED, 2, -4)
-    b2 = Box(88, 61, 100, 100, GREEN, -2, 1)
-    b3 = Box(100, 575, 20, 45, BLUE)
+    b1 = Box(62, 171, 20, 20, RED, 2, -4)
+    b2 = Box(90, 60, 65, 65, GREEN, -2, 1)
+    b3 = Box(100, 575, 20, 20, BLUE)
     b4 = Box(50, 50, 20, 20, RED)
     b5 = Box(470, 370, 20, 20, YELLOW)
     b6 = Box(300, 550, 30, 30, CHARTREUSE)
@@ -40,8 +40,8 @@ def make_random_boxes():
     b8 = Box(150, 300, 40, 40, YELLOW)
     b9 = Box(350, 100, 40, 40, CHARTREUSE)
     b10 = Box(150, 100, 40, 40, AQUA_MARINE)
-    b11 = Box(440, 4, 100, 100, YELLOW)
-    b12 = Box(200, 200, 100, 100, CHARTREUSE)
+    b11 = Box(440, 4, 70, 70, YELLOW)
+    b12 = Box(200, 200, 70, 70, CHARTREUSE)
     b13 = Box(400, 150, 60, 60, AQUA_MARINE)
     b14 = Box(150, 350, 20, 20, RED)
     b15 = Box(150, 450, 20, 20, YELLOW)
@@ -63,11 +63,14 @@ class Environment:
 
     # Convert from meters to pixels
     def px_from_m(self, dx_m):
-        return int(round(dx_m * self.px_per_m))
+        return int(dx_m * self.px_per_m)
+
+    def px_from_speed(self, speed):
+        return speed * self.px_per_m
 
     # Convert from pixels to meters
-    def m_from_px(self, dx_px):
-        return float(dx_px) / self.px_per_m
+    def m_from_px(self, px):
+        return float(px) / self.px_per_m
 
 
 class GameWindow:
@@ -100,12 +103,14 @@ class GameWindow:
 
 
 class PlayGround:
-    def __init__(self, window):
+    def __init__(self, window, sticky_boxes=False, sticky_walls=False, color_transfer=False):
         self.boxes = []
         self.boxCount = len(self.boxes)
-        self.color_transfer = False
+        self.color_transfer = color_transfer
         self.boundary = pygame.Rect(0, 0, window.width_px, window.height_px)
         self.window = window
+        self.sticky_boxes = sticky_boxes
+        self.sticky_walls = sticky_walls
 
     def draw(self):
         for rect in self.boxes:
@@ -116,10 +121,9 @@ class PlayGround:
             rect.move_box(dt_s)
 
     def collide(self):
-        for rect in self.boxes:
-            rect.collide_playground(self.boundary)
         for i, rect in enumerate(self.boxes):
-            rect.collide_boxes(self.boxes)
+            rect.collide_playground(self.boundary, self.sticky_walls)
+            rect.collide_boxes(self.boxes[i + 1:], self.sticky_boxes)
 
     def create_model(self):
         self.boxes = make_random_boxes()
@@ -139,23 +143,18 @@ class Speed:
     def __init__(self, x_mps=None, y_mps=None):
         self.x_mps = random_speed(x_mps)
         self.y_mps = random_speed(y_mps)
-        self._tmp_speed = None
-        self._next_speed = None
 
     def __repr__(self):
         return str(vars(self))
 
-    def bounce(self):
-        self._next_speed = Speed(-self.x_mps, -self.y_mps)
+    def __neg__(self):
+        return Speed(-self.x_mps, -self.y_mps)
 
     def bounce_y(self):
-        self._next_speed = Speed(self.x_mps, -self.y_mps)
+        self.y_mps = -self.y_mps
 
     def bounce_x(self):
-        self._next_speed = Speed(-self.x_mps, self.y_mps)
-
-    def append(self, x=None, y=None):
-        self._tmp_speed = None if x is None and y is None else Speed(x, y)
+        self.x_mps = -self.x_mps
 
     @property
     def abs_x_mps(self):
@@ -165,29 +164,24 @@ class Speed:
     def abs_y_mps(self):
         return abs(self.y_mps)
 
+    def __add__(self, other):
+        return Speed(self.x_mps + other.x_mps, self.y_mps + other.y_mps)
+
+    def __sub__(self, other):
+        return Speed(self.x_mps - other.x_mps, self.y_mps - other.y_mps)
+
+    def __mul__(self, other):
+        return Speed(self.x_mps * other, self.y_mps * other)
+
+    def __rmul__(self, other):
+        return self.__mul__(other)
+
+    def __truediv__(self, other):
+        return Speed(self.x_mps / other, self.y_mps / other)
+
     @property
     def coords(self):
-        if self._next_speed is not None:
-            self.x_mps = self._next_speed.x_mps
-            self.y_mps = self._next_speed.y_mps
-            self._next_speed = None
-        speed = self
-        if self._tmp_speed is not None:
-            speed = Speed(speed.x_mps + self._tmp_speed.x_mps, speed.y_mps + self._tmp_speed.y_mps)
-            self._tmp_speed = None
-
-        return speed.x_mps, speed.y_mps
-
-    @property
-    def next_coords(self):
-        speed = self
-        if self._next_speed is not None:
-            self.x_mps = self._next_speed.x_mps
-            self.y_mps = self._next_speed.y_mps
-        if self._tmp_speed is not None:
-            speed = Speed(speed.x_mps + self._tmp_speed.x_mps, speed.y_mps + self._tmp_speed.y_mps)
-
-        return speed.x_mps, speed.y_mps
+        return self.x_mps, self.y_mps
 
 
 class Box(pygame.Rect):
@@ -196,6 +190,7 @@ class Box(pygame.Rect):
     def __init__(self, x, y, width=DEFAULT_WIDTH, height=DEFAULT_HEIGHT, color=THECOLORS["aquamarine"], x_mps=None,
                  y_mps=None):
         super().__init__(x, y, width, height)
+        self.m_kg = 1.0  # math.log10(width * height)
         self.speed = Speed(x_mps, y_mps)
         self.color = color
         self.links = []
@@ -207,70 +202,78 @@ class Box(pygame.Rect):
         self.links.append(box)
 
     def move_box(self, dt_s):
-        x, y = self.speed.coords
+        self.move_m(self.speed, dt_s)
 
-        links_nb = len(self.links)
-        if links_nb > 0:
-            center_x, center_y = None, None
-            for box in self.links:
-                center_x += box.centerx
-                center_y += box.centery
-            center_x /= links_nb
-            center_y /= links_nb
+    def move_m(self, speed, dt_s):
+        self.move_ip(env.px_from_speed(dt_s * speed).coords)
 
-        self.move_ip(env.px_from_m(x * dt_s), env.px_from_m(y * dt_s))
-
-    def collide_playground(self, playground):
+    def collide_playground(self, playground, sticky_walls):
         if playground.contains(self):
             return
         # Collision with top side
-        if self.collidepoint(self.left, playground.top):
+        if self.top <= playground.top:
             self.bounce_y()
-            self.speed.append(0, playground.top - self.top)
+            if not sticky_walls:
+                self.top = playground.top
         # Collision with bottom side
-        if self.collidepoint(self.left, playground.bottom):
+        if self.bottom >= playground.bottom:
             self.bounce_y()
-            self.speed.append(0, playground.bottom - self.bottom)
+            if not sticky_walls:
+                self.bottom = playground.bottom
         # Collision with left side
-        if self.collidepoint(playground.left, self.top):
+        if self.left <= playground.left:
             self.bounce_x()
-            self.speed.append(playground.left - self.left, 0)
+            if not sticky_walls:
+                self.left = playground.left
         # Collision with right side
-        if self.collidepoint(playground.right, self.top):
+        if self.right >= playground.right:
             self.bounce_x()
-            self.speed.append(playground.right - self.right, 0)
+            if not sticky_walls:
+                self.right = playground.right
 
-    def collide_boxes(self, boxes):
+    def collide_boxes(self, boxes, sticky_boxes):
         for box in boxes:
-            if box == self:
-                continue
             if self.colliderect(box):
-                self.collide_box(box)
+                self.collide_box(box, sticky_boxes)
 
-    def collide_box(self, box):
-        dy = 0.5 * (self.centery - box.centery)
-        dx = 0.5 * (self.centerx - box.centerx)
-        if dx == 0.0:
-            self.collide_y(box)
-            return
-        if dy == 0.0:
-            self.collide_x(box)
-            return
+    def collide_box(self, box, sticky_boxes):
+        if playground.color_transfer:
+            self.color, box.color = box.color, self.color
+        if not sticky_boxes:
+            self.fix_penetrations(box)
+        self.speed, box.speed = self.post_collide_speeds(box)
 
-        w = self.width + box.width
-        h = self.height + box.height
-        wy = w * dy
-        hx = h * dx
-        if wy > hx:
-            if wy > -hx:
-                self.collide_y(box)
-            else:
-                self.collide_x(box)
-        else:
-            if wy > -hx:
-                self.collide_x(box)
-            else:
-                self.collide_y(box)
+    def post_collide_speeds(self, box, restitution_coef=1.0):
+        # Calculate the AFTER velocities.
+        mps = self.m_kg * self.speed + box.m_kg * box.speed
+        kg = self.m_kg + self.m_kg
+        self_speed = (restitution_coef * box.m_kg * (box.speed - self.speed) + mps) / kg
+        box_speed = (restitution_coef * self.m_kg * (self.speed - box.speed) + mps) / kg
+
+        return self_speed, box_speed
+
+    def fix_penetrations(self, box):
+        relative_spd_mps = self.speed - box.speed
+        penetration_width = env.m_from_px((self.width + box.width) / 2 - abs(self.centerx - box.centerx))
+        penetration_height = env.m_from_px((self.height + box.height) / 2 - abs(self.centery - box.centery))
+
+        penetration_time_s_x = 0 if relative_spd_mps.x_mps == 0 else penetration_width / relative_spd_mps.abs_x_mps
+        penetration_time_s_y = 0 if relative_spd_mps.y_mps == 0 else penetration_height / relative_spd_mps.abs_y_mps
+        penetration_time = min(penetration_time_s_x, penetration_time_s_y)
+
+        # First, back up the two cars, to their collision point, along their incoming trajectory paths.
+        # Use BEFORE collision velocities here!
+        self.move_m(-self.speed, penetration_time)
+        box.move_m(-box.speed, penetration_time)
+
+        # Calculate the velocities along the normal AFTER the collision. Use a CR (coefficient of restitution)
+        # of 1 here to better avoid stickiness.
+        (self_vel, box_vel) = self.post_collide_speeds(box, restitution_coef=1.0)
+
+        # Finally, travel another penetration time worth of distance using these AFTER-collision velocities.
+        # This will put the cars where they should have been at the time of collision detection.
+        self.move_m(self_vel, penetration_time)
+        box.move_m(box_vel, penetration_time)
 
     def bounce_y(self):
         self.speed.bounce_y()
@@ -283,9 +286,6 @@ class Box(pygame.Rect):
             if not box.speed.abs_x_mps > self.speed.abs_x_mps:
                 self.bounce_x()
         else:
-            if self.speed.abs_x_mps + box.speed.abs_x_mps != 0:
-                h = self.clip(box).width / (self.speed.abs_x_mps + box.speed.abs_x_mps) * self.speed.x_mps
-                self.speed.append(-h, 0)
             self.bounce_x()
 
     def collide_y(self, box):
@@ -293,22 +293,19 @@ class Box(pygame.Rect):
             if not box.speed.abs_y_mps > self.speed.abs_y_mps:
                 self.bounce_y()
         else:
-            if self.speed.abs_y_mps + box.speed.abs_y_mps != 0:
-                h = self.clip(box).height / (self.speed.abs_y_mps + box.speed.abs_y_mps) * self.speed.y_mps
-                self.speed.append(0, -h)
             self.bounce_y()
 
 
 def main():
-    global env
+    global env, game_window, playground
     pygame.init()
     window_size_px = window_width_px, window_height_px = WINDOW_WIDTH, WINDOW_HEIGHT
     env = Environment(window_width_px, window_height_px, 50)
     game_window = GameWindow(env, window_size_px)
-    playground = PlayGround(game_window)
+    playground = PlayGround(game_window, False, False, True)
     playground.create_model()
     myclock = pygame.time.Clock()
-    framerate_limit = 400
+    framerate_limit = 100
     while True:
         game_window.surface.fill(BLACK)
         dt_s = float(myclock.tick(framerate_limit) * 1e-3)
