@@ -241,39 +241,39 @@ class Box(pygame.Rect):
             self.color, box.color = box.color, self.color
         if not sticky_boxes:
             self.fix_penetrations(box)
-        self.speed, box.speed = self.post_collide_speeds(box)
+        else:
+            self.speed, box.speed = self.post_collide_speeds(box)
 
-    def post_collide_speeds(self, box, restitution_coef=1.0):
-        # Calculate the AFTER velocities.
+    def post_collide_speeds(self, box, restit_coef=1.0):
         mps = self.m_kg * self.speed + box.m_kg * box.speed
         kg = self.m_kg + self.m_kg
-        self_speed = (restitution_coef * box.m_kg * (box.speed - self.speed) + mps) / kg
-        box_speed = (restitution_coef * self.m_kg * (self.speed - box.speed) + mps) / kg
-
+        rel_speed = self.speed - box.speed
+        self_speed = (mps - restit_coef * box.m_kg * rel_speed) / kg
+        box_speed = (restit_coef * self.m_kg * rel_speed + mps) / kg
         return self_speed, box_speed
 
     def fix_penetrations(self, box):
-        relative_spd_mps = self.speed - box.speed
+        rel_speed = self.speed - box.speed
         penetration_width = env.m_from_px((self.width + box.width) / 2 - abs(self.centerx - box.centerx))
         penetration_height = env.m_from_px((self.height + box.height) / 2 - abs(self.centery - box.centery))
 
-        penetration_time_s_x = 0 if relative_spd_mps.x_mps == 0 else penetration_width / relative_spd_mps.abs_x_mps
-        penetration_time_s_y = 0 if relative_spd_mps.y_mps == 0 else penetration_height / relative_spd_mps.abs_y_mps
-        penetration_time = min(penetration_time_s_x, penetration_time_s_y)
+        penetration_ts_x = 0 if rel_speed.x_mps == 0 else penetration_width / rel_speed.abs_x_mps
+        penetration_ts_y = 0 if rel_speed.y_mps == 0 else penetration_height / rel_speed.abs_y_mps
+        penetration_ts = min(penetration_ts_x, penetration_ts_y)
 
         # First, back up the two cars, to their collision point, along their incoming trajectory paths.
         # Use BEFORE collision velocities here!
-        self.move_m(-self.speed, penetration_time)
-        box.move_m(-box.speed, penetration_time)
+        self.move_m(-self.speed, penetration_ts)
+        box.move_m(-box.speed, penetration_ts)
 
         # Calculate the velocities along the normal AFTER the collision. Use a CR (coefficient of restitution)
         # of 1 here to better avoid stickiness.
-        (self_vel, box_vel) = self.post_collide_speeds(box, restitution_coef=1.0)
+        self.speed, box.speed = self.post_collide_speeds(box, restit_coef=1.0)
 
         # Finally, travel another penetration time worth of distance using these AFTER-collision velocities.
         # This will put the cars where they should have been at the time of collision detection.
-        self.move_m(self_vel, penetration_time)
-        box.move_m(box_vel, penetration_time)
+        self.move_box(penetration_ts)
+        box.move_box(penetration_ts)
 
     def bounce_y(self):
         self.speed.bounce_y()
@@ -305,7 +305,7 @@ def main():
     playground = PlayGround(game_window, False, False, True)
     playground.create_model()
     myclock = pygame.time.Clock()
-    framerate_limit = 100
+    framerate_limit = 500
     while True:
         game_window.surface.fill(BLACK)
         dt_s = float(myclock.tick(framerate_limit) * 1e-3)
